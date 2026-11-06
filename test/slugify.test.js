@@ -9,3 +9,8 @@ test('lowercases and joins words with dashes', () => {
 test('collapses punctuation and trims edge dashes', () => {
   assert.equal(slugify('  -- Release 2.0, final! --  '), 'release-2-0-final');
 });
+
+test('drops apostrophes inside words instead of splitting on them', () => {
+  assert.equal(slugify("Don't panic"), 'dont-panic');
+  assert.equal(slugify('Don’t panic'), 'dont-panic');
+});
