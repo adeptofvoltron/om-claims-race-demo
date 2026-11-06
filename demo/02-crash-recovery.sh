@@ -9,10 +9,10 @@
 # 4. Run C verifies the human reset, retires the dead generation by its exact
 #    SHA, takes the issue, finishes and releases.
 #
-# Usage: demo/02-crash-recovery.sh <issue-number> [skill, default om-auto-manage-issues]
+# Usage: demo/02-crash-recovery.sh <issue-number> [skill, default om-auto-fix-issue]
 . "$(dirname "$0")/lib.sh"
 N=${1:-}; require_number "$N"
-SKILL=${2:-om-auto-manage-issues}
+SKILL=${2:-om-auto-fix-issue}
 case "$SKILL" in om-*) ;; *) die "skill must be an om-* name" ;; esac
 require_skills
 load_lock_helpers

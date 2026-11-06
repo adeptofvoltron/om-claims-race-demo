@@ -73,28 +73,39 @@ owned() {
 
 # Logs every change of the repository's lock refs (with owner run ids) until
 # all given pids exit. $1 = output dir, then pids.
+# LOCK_FILTER (an extended regex matched against "<ref> ") keeps parallel
+# scenarios apart: matching refs are shown, plus any other lock held by a run
+# seen on them, so a chain's hand-off from issue to PR stays visible.
 watch_locks() {
-  out=$1; shift; last=unset
+  out=$1; shift; last_raw=unset; last_state=unset; seen_runs=" "
   while :; do
     alive=0
     for pid in "$@"; do kill -0 "$pid" 2>/dev/null && alive=1; done
     raw=$(gh api "repos/$REPO/git/matching-refs/om-locks/" --jq '.[] | .ref + " " + .object.sha' 2>/dev/null) || raw=unreadable
-    # LOCK_FILTER (an extended regex on refs) keeps parallel scenarios' timelines apart.
-    if [ -n "${LOCK_FILTER:-}" ] && [ "$raw" != unreadable ]; then
-      raw=$(printf '%s\n' "$raw" | grep -E "$LOCK_FILTER" || true)
-    fi
-    if [ "$raw" != "$last" ]; then
-      if [ -z "$raw" ]; then state="no lock refs"
-      elif [ "$raw" = unreadable ]; then state="lock listing unreadable"
+    if [ "$raw" != "$last_raw" ]; then
+      last_raw=$raw
+      if [ "$raw" = unreadable ]; then state="lock listing unreadable"
       else
-        state=$(printf '%s\n' "$raw" | while read -r ref sha; do
+        state=""
+        while read -r ref sha; do
+          [ -n "$ref" ] || continue
           name=${ref#refs/om-locks/}
           run=$(gh_get_lock "${name%%-*}" "${name#*-}" 2>/dev/null | jq -r '.runId // "?"' 2>/dev/null) || run="?"
-          printf '%s @ %s run=%s; ' "$name" "${sha:0:12}" "${run:-?}"
-        done)
+          if [ -z "${LOCK_FILTER:-}" ] || printf '%s \n' "$ref" | grep -Eq "$LOCK_FILTER"; then
+            seen_runs="$seen_runs$run "
+          else
+            case "$seen_runs" in *" $run "*) ;; *) continue ;; esac
+          fi
+          state="$state$name @ ${sha:0:12} run=${run:-?}; "
+        done <<EOF
+$raw
+EOF
+        [ -n "$state" ] || state="no lock refs"
       fi
-      echo "[$(now)] locks: $state" | tee -a "$out/timeline.txt"
-      last=$raw
+      if [ "$state" != "$last_state" ]; then
+        echo "[$(now)] locks: $state" | tee -a "$out/timeline.txt"
+        last_state=$state
+      fi
     fi
     [ "$alive" = 1 ] || break
     sleep 5

@@ -7,10 +7,10 @@
 # it writes anything (no comment, label or assignment). At the end the lock
 # ref is gone and the issue carries one set of results.
 #
-# Usage: demo/01-skill-race.sh <issue-number> [skill, default om-auto-manage-issues]
+# Usage: demo/01-skill-race.sh <issue-number> [skill, default om-auto-fix-issue]
 . "$(dirname "$0")/lib.sh"
 N=${1:-}; require_number "$N"
-SKILL=${2:-om-auto-manage-issues}
+SKILL=${2:-om-auto-fix-issue}
 case "$SKILL" in om-*) ;; *) die "skill must be an om-* name" ;; esac
 require_skills
 load_lock_helpers
