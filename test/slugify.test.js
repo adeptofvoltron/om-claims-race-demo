@@ -9,3 +9,8 @@ test('lowercases and joins words with dashes', () => {
 test('collapses punctuation and trims edge dashes', () => {
   assert.equal(slugify('  -- Release 2.0, final! --  '), 'release-2-0-final');
 });
+
+test('transliterates Polish letters with diacritics to their base letter', () => {
+  assert.equal(slugify('Zażółć gęślą jaźń'), 'zazolc-gesla-jazn');
+  assert.equal(slugify('ŁÓDŹ'), 'lodz');
+});
