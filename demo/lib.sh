@@ -79,6 +79,10 @@ watch_locks() {
     alive=0
     for pid in "$@"; do kill -0 "$pid" 2>/dev/null && alive=1; done
     raw=$(gh api "repos/$REPO/git/matching-refs/om-locks/" --jq '.[] | .ref + " " + .object.sha' 2>/dev/null) || raw=unreadable
+    # LOCK_FILTER (an extended regex on refs) keeps parallel scenarios' timelines apart.
+    if [ -n "${LOCK_FILTER:-}" ] && [ "$raw" != unreadable ]; then
+      raw=$(printf '%s\n' "$raw" | grep -E "$LOCK_FILTER" || true)
+    fi
     if [ "$raw" != "$last" ]; then
       if [ -z "$raw" ]; then state="no lock refs"
       elif [ "$raw" = unreadable ]; then state="lock listing unreadable"
@@ -97,13 +101,17 @@ watch_locks() {
   done
 }
 
+# Headless agent flags. Only project/local settings load, so the presenter's
+# personal hooks and plugins cannot change how the skills behave.
+AGENT_FLAGS="--permission-mode bypassPermissions --setting-sources project,local --output-format stream-json --verbose"
+
 # Runs one headless agent session. $1 label, $2 prompt, $3 output dir,
 # $4 optional epoch second to start at (so two runs start together).
 run_agent() {
   if [ -n "${4:-}" ]; then while [ "$(date +%s)" -lt "$4" ]; do sleep 0.1; done; fi
   echo "[$(now)] run $1 started: $2" | tee -a "$3/timeline.txt"
-  (cd "$DEMO_ROOT" && exec claude -p "$2" --permission-mode bypassPermissions \
-    --output-format stream-json --verbose) > "$3/run-$1.jsonl" 2> "$3/run-$1.err" || true
+  # shellcheck disable=SC2086 # AGENT_FLAGS is a word list
+  (cd "$DEMO_ROOT" && exec claude -p "$2" $AGENT_FLAGS) > "$3/run-$1.jsonl" 2> "$3/run-$1.err" || true
   jq -r 'select(.type == "result") | .result' "$3/run-$1.jsonl" > "$3/result-$1.md" 2>/dev/null || true
   echo "[$(now)] run $1 finished" | tee -a "$3/timeline.txt"
 }

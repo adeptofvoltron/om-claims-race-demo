@@ -25,8 +25,8 @@ snapshot "$N" | tee "$OUT/before.txt"
 # Job control gives the background agent its own process group, so the kill
 # takes its tool subprocesses down with it.
 set -m
-(cd "$DEMO_ROOT" && exec claude -p "/$SKILL $N" --permission-mode bypassPermissions \
-  --output-format stream-json --verbose) > "$OUT/run-A.jsonl" 2> "$OUT/run-A.err" &
+# shellcheck disable=SC2086 # AGENT_FLAGS is a word list
+(cd "$DEMO_ROOT" && exec claude -p "/$SKILL $N" $AGENT_FLAGS) > "$OUT/run-A.jsonl" 2> "$OUT/run-A.err" &
 pa=$!
 set +m
 echo "[$(now)] run A started (pid $pa)" | tee -a "$OUT/timeline.txt"
