@@ -49,9 +49,20 @@ it targeted. Raw agent logs stay in `.demo/` (git-ignored) on the machine that r
 |---|---|
 | PR's own validation gate (10 commands from `.ai/agentic.config.json`, run locally on `9c0ef49`) | ✅ all exit 0, including the new atomic-claim, claim-protocol and GitLab/Forgejo lock tests |
 | Scenario 0 on [#1](../../issues/1) | ✅ 10/10 rounds with exactly one owner (A won 5, B won 5); in every round both contenders reached the create-only POST before either was sent. A late release by a retired owner was refused and the successor kept its lock. No lock ref left behind. |
-| Side effects of lock refs | ✅ ~24 creates/deletes under `refs/om-locks/` started no workflow run (the only run is the initial push to `main`). |
+| Side effects of lock refs | ✅ No lock ref under `refs/om-locks/` ever started a workflow run: ~24 creates/deletes in scenario 0 plus every agent lock. Runs came only from `main` pushes, the two fix branches and their PRs. |
 | Two `om-auto-manage-issues` runs on [#2](../../issues/2) | ⚠️ Not protected. The skill is skip-only by design ("a light housekeeping pass, so it does not take its own long-lived `in-progress` lock"): both runs saw no lock, both did the work. Each of its four comments is on the issue twice, and both runs rewrote the issue body seven seconds apart. |
-| Scenarios 1–2 with `om-auto-fix-issue` | _running_ |
+| Scenario 1 on [#4](../../issues/4) | ✅ One owner. Run A lost when `om-fix` tried to create `refs/om-locks/issue-4` (run B had created it at 09:39:07Z); A stopped and wrote nothing to the tracker. B fixed the bug and opened [PR #5](../../pull/5). |
+| Scenario 2 on [#3](../../issues/3) | ✅ Run A claimed (lock, active claim comment, `in-progress`, assignee) and was killed with SIGKILL. Run B stopped 30 s later naming A's run id and wrote nothing. After `claim-reset`, run C retired A's lock by its exact SHA, took a new lock, fixed the bug and opened [PR #6](../../pull/6). |
+| Chain hand-off (scenario 3's check) | ✅ Seen in both winners: the issue lock moved to the PR lock under the same run id, both refs existed briefly together, so the item never looked unclaimed; both were released at the end and no ref remains. Scenario 3 was not run separately. |
+
+### Observations outside the lock itself
+
+- **Skip-only skills race freely.** See the `om-auto-manage-issues` row above: duplicated comments and a last-writer-wins issue body.
+- **Branch collision before the claim.** Both scenario 1 runs created worktrees on the same local branch, `fix/issue-4-…`, during the read-only steps that come before `om-fix` claims. The loser reported this and made no commits, so nothing broke, but the lock does not cover it.
+- **The dead run's claim comment still reads `Claim-State: active`.** The reset retires it logically (it predates the reset), and run C left it untouched. Someone reading #3 sees an "active" claim from a run that no longer exists.
+- **A crash leaves local debris.** Run A's worktree under `.ai/tmp/` keeps its staged, unfinished changes until someone removes it.
+- **Headless chains can stop early.** With the bare `/om-auto-fix-issue 3` prompt, two runs on #3 ended at `om-verify-in-repo`'s "Proceed" verdict and never reached the claim; a plain-language prompt asking for the whole chain fixed it. Not related to PR #176.
+- **Labels after a self-review.** Both PRs got `merge-queue` although GitHub refused the self-approval, so the review went up as a comment. PR #5 has no QA meta label at all; PR #6 has `skip-qa`. Not related to PR #176.
 
 ## Setup
 
@@ -80,6 +91,9 @@ demo/setup-labels.sh        # idempotent; in-progress must exist or claims block
 - One GitHub account plays every role. That is the realistic case for two
   scheduled bot runs, but it cannot show that a `claim-reset` applied by a bot
   is ignored, and the review step cannot approve a PR from the same account.
+  In the recorded run of scenario 2 the `claim-reset` label was added through
+  the API from that account, on the operator's instruction, rather than by a
+  click in the UI.
 - Only GitHub. The PR's GitLab and Forgejo helpers are covered by its own
   tests with real Git and mocked APIs, not here.
 - Agent runs use `--permission-mode bypassPermissions`. Interactions on this

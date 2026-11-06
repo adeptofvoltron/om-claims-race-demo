@@ -17,6 +17,10 @@ case "$SKILL" in om-*) ;; *) die "skill must be an om-* name" ;; esac
 require_skills
 load_lock_helpers
 [ "$(gh_get_lock issue "$N")" = null ] || die "#$N already has a lock; pick a free issue"
+# A plain request instead of "/$SKILL $N": as a bare slash command, headless
+# runs on this issue twice ended at the first sub-skill's verdict, before the
+# step that claims.
+PROMPT="Run the $SKILL skill on issue #$N and carry its workflow through every chained step to its own final report. A sub-skill's verdict is input to the next step, not the end of the run."
 STARTED=$(now)
 OUT="$LOG_DIR/crash-recovery-$N-$(date +%Y%m%dT%H%M%S)"
 mkdir -p "$OUT"
@@ -26,7 +30,7 @@ snapshot "$N" | tee "$OUT/before.txt"
 # takes its tool subprocesses down with it.
 set -m
 # shellcheck disable=SC2086 # AGENT_FLAGS is a word list
-(cd "$DEMO_ROOT" && exec claude -p "/$SKILL $N" $AGENT_FLAGS) > "$OUT/run-A.jsonl" 2> "$OUT/run-A.err" &
+(cd "$DEMO_ROOT" && exec claude -p "$PROMPT" $AGENT_FLAGS --append-system-prompt "$AGENT_NOTE") > "$OUT/run-A.jsonl" 2> "$OUT/run-A.err" &
 pa=$!
 set +m
 echo "[$(now)] run A started (pid $pa)" | tee -a "$OUT/timeline.txt"
@@ -42,7 +46,7 @@ CRASHED_AT=$(now)
 echo "[$CRASHED_AT] run A owned #$N and was killed with SIGKILL" | tee -a "$OUT/timeline.txt"
 snapshot "$N" | tee "$OUT/after-crash.txt"
 
-run_agent B "/$SKILL $N" "$OUT"
+run_agent B "$PROMPT" "$OUT"
 snapshot "$N" | tee "$OUT/after-B.txt"
 
 echo
@@ -56,7 +60,7 @@ until reset=$(gh_get_claim_reset "$N" 2>/dev/null) && [ "$reset" != null ] &&
 done
 echo "[$(now)] verified human reset: $(printf '%s' "$reset" | jq -c .)" | tee -a "$OUT/timeline.txt"
 
-run_agent C "/$SKILL $N" "$OUT" & pc=$!
+run_agent C "$PROMPT" "$OUT" & pc=$!
 watch_locks "$OUT" "$pc"
 wait "$pc" || true
 snapshot "$N" | tee "$OUT/after-C.txt"

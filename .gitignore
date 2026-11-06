@@ -4,3 +4,5 @@
 # Raw agent logs stay local; curated results are posted to the issues.
 .demo/
 node_modules/
+# Agent worktrees.
+.ai/tmp/

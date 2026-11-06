@@ -115,6 +115,10 @@ EOF
 # Headless agent flags. Only project/local settings load, so the presenter's
 # personal hooks and plugins cannot change how the skills behave.
 AGENT_FLAGS="--permission-mode bypassPermissions --setting-sources project,local --output-format stream-json --verbose"
+# Headless runs once ended right after a chained sub-skill's verdict
+# (om-verify-in-repo's "Proceed"), so they get this one-line reminder. It
+# changes nothing about claiming.
+AGENT_NOTE="You are running unattended with no user to reply. Carry the invoked skill's workflow through every chained step to its own final report before ending your turn; a sub-skill's verdict is input to the next step, not the end of the run."
 
 # Runs one headless agent session. $1 label, $2 prompt, $3 output dir,
 # $4 optional epoch second to start at (so two runs start together).
@@ -122,7 +126,7 @@ run_agent() {
   if [ -n "${4:-}" ]; then while [ "$(date +%s)" -lt "$4" ]; do sleep 0.1; done; fi
   echo "[$(now)] run $1 started: $2" | tee -a "$3/timeline.txt"
   # shellcheck disable=SC2086 # AGENT_FLAGS is a word list
-  (cd "$DEMO_ROOT" && exec claude -p "$2" $AGENT_FLAGS) > "$3/run-$1.jsonl" 2> "$3/run-$1.err" || true
+  (cd "$DEMO_ROOT" && exec claude -p "$2" $AGENT_FLAGS --append-system-prompt "$AGENT_NOTE") > "$3/run-$1.jsonl" 2> "$3/run-$1.err" || true
   jq -r 'select(.type == "result") | .result' "$3/run-$1.jsonl" > "$3/result-$1.md" 2>/dev/null || true
   echo "[$(now)] run $1 finished" | tee -a "$3/timeline.txt"
 }
