@@ -1,0 +1,6 @@
+# Skills are installed locally from a pinned commit (demo/install-skills.sh).
+.claude/skills/
+.claude/skills.ref
+# Raw agent logs stay local; curated results are posted to the issues.
+.demo/
+node_modules/

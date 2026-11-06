@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Test shim used only by demo/00-helper-race.sh. Every call goes to the real gh
+# unchanged, except that a contender's create-only ref POST first waits until
+# the other contender has reached the same point. Both creates then hit GitHub
+# together, so GitHub, not timing luck, decides the winner.
+[ -n "${REAL_GH:-}" ] || { echo "gh shim: REAL_GH is not set" >&2; exit 1; }
+if [ -n "${RACE_BARRIER:-}" ]; then
+  case " $* " in
+    *" -X POST "*"/git/refs "*)
+      : > "$RACE_BARRIER/$RACE_WORKER"
+      arrived() { n=0; for f in "$RACE_BARRIER"/*; do [ -e "$f" ] && n=$((n + 1)); done; echo "$n"; }
+      tries=0
+      while [ "$(arrived)" -lt 2 ] && [ "$tries" -lt 400 ]; do
+        tries=$((tries + 1)); sleep 0.05
+      done
+      ;;
+  esac
+fi
+exec "$REAL_GH" "$@"

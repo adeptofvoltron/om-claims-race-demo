@@ -1,0 +1,11 @@
+{
+  "name": "om-claims-race-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Public test bed for the race-safe claim protocol in open-mercato/skills PR #176.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test"
+  }
+}

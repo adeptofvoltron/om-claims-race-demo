@@ -1,0 +1,80 @@
+# om-claims-race-demo
+
+A public, disposable test bed for [open-mercato/skills PR #176](https://github.com/open-mercato/skills/pull/176),
+"fix(claims): elect one run before claiming work". It runs the PR's claim
+protocol against a real GitHub repository, so every claim, conflict, label,
+lock ref and release is visible in this repo's issues and refs.
+
+## What the PR changes
+
+Before the PR, a skill claimed an issue or PR by reading (assignee, `in-progress`,
+claim comment) and then writing. Two runs starting close together could both
+read "free" and both do the work. The PR makes each run first create the Git
+ref `refs/om-locks/{kind}-{number}` through GitHub's create-only API. Only one
+create can succeed, so only one run owns the item; the loser stops before
+writing anything. The owner releases the ref last, with an expected-SHA Git
+lease, so a late or stale release cannot delete a successor's lock.
+
+Everything here runs the PR head, `open-mercato/skills@9c0ef49` (pinned in
+`demo/SKILLS_REF`). The tracker descriptor in `.ai/trackers/github.md` is a
+verbatim copy from that commit; `demo/install-skills.sh` refuses to run if it drifts.
+
+## Scenarios
+
+| # | Script | Shows | Cost |
+|---|---|---|---|
+| 0 | `demo/00-helper-race.sh <issue> [rounds]` | The atomic primitive under true simultaneity: two same-login contenders reach the create-only POST together; one `acquired`, one `conflict`, clean release. Plus fencing: a retired owner's late release cannot delete its successor. | API calls only, ~1 min |
+| 1 | `demo/01-skill-race.sh <issue> [skill]` | Two real agent runs (default `om-auto-manage-issues`) start in the same second. One works; the other stops naming the owner and writes nothing. | 2 agent sessions |
+| 2 | `demo/02-crash-recovery.sh <issue> [skill]` | The owner is killed with SIGKILL mid-run. A second run is blocked. A human adds `claim-reset` in the UI; a third run retires the dead lock by its exact SHA and finishes. | 3 agent sessions + 1 human click |
+| 3 | `demo/03-chain.sh <issue> [skill]` | A full `om-auto-fix-issue` chain (verify, fix, PR, review): one owner run across every hand-off, no self-block, no unclaimed gap. | 1 long agent session |
+
+Each script prints a timeline, and posts a `🧪 Demo harness` report on the issue
+it targeted. Raw agent logs stay in `.demo/` (git-ignored) on the machine that ran them.
+
+| Issue | Use it for |
+|---|---|
+| [#1](../../issues/1) | Scenario 0 |
+| [#2](../../issues/2) | Scenario 1 |
+| [#3](../../issues/3) | Scenario 2 |
+| [#4](../../issues/4) | Scenario 3 |
+
+## Results
+
+| What | Result |
+|---|---|
+| PR's own validation gate (10 commands from `.ai/agentic.config.json`, run locally on `9c0ef49`) | ✅ all exit 0, including the new atomic-claim, claim-protocol and GitLab/Forgejo lock tests |
+| Scenario 0 | _pending_ |
+| Scenarios 1–3 | _not run yet_ |
+
+## Setup
+
+Requirements: `gh` authenticated with `repo` scope and wired as the Git
+credential helper (`gh auth setup-git`), because lock release goes through
+`git push`, not the REST API. Also `jq`, Node.js 20+, and the `claude` CLI for
+scenarios 1–3.
+
+```bash
+gh repo clone adeptofvoltron/om-claims-race-demo && cd om-claims-race-demo
+demo/install-skills.sh      # skills from the pinned commit into .claude/skills
+demo/setup-labels.sh        # idempotent; in-progress must exist or claims block
+```
+
+## During a presentation
+
+- Watch locks live: `git ls-remote origin 'refs/om-locks/*'`
+- Ownership of one issue: `bash -c '. demo/lib.sh; load_lock_helpers; snapshot 2'`
+- Claim comments carry `Claim-Run`, `Claim-Lock` and `Claim-Lock-SHA`; the
+  losing run in a race leaves no comment at all.
+- The Actions tab shows whether lock-ref pushes start workflow runs (the
+  workflow here is deliberately unfiltered).
+
+## Limits of this demo
+
+- One GitHub account plays every role. That is the realistic case for two
+  scheduled bot runs, but it cannot show that a `claim-reset` applied by a bot
+  is ignored, and the review step cannot approve a PR from the same account.
+- Only GitHub. The PR's GitLab and Forgejo helpers are covered by its own
+  tests with real Git and mocked APIs, not here.
+- Agent runs use `--permission-mode bypassPermissions`. Interactions on this
+  repository are limited to collaborators so outsiders cannot plant issue or
+  comment text for those runs to read.
