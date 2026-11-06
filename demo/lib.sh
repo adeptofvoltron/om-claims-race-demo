@@ -22,7 +22,13 @@ now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
 issue_url() { printf 'https://github.com/%s/issues/%s\n' "$REPO" "$1"; }
 
-base_sha() { gh repo view "$REPO" --json defaultBranchRef --jq .defaultBranchRef.target.oid; }
+# Head commit of the default branch: the base every lock metadata commit hangs off.
+base_sha() {
+  branch=$(gh repo view "$REPO" --json defaultBranchRef --jq .defaultBranchRef.name) || return 1
+  sha=$(gh api "repos/$REPO/commits/$branch" --jq .sha) || return 1
+  printf '%s' "$sha" | grep -Eq '^[0-9a-f]{40}$' || die "cannot resolve the head of $branch"
+  printf '%s\n' "$sha"
+}
 
 # Loads the lock helpers verbatim from the pinned descriptor, so the demo runs
 # exactly the code the skills run.

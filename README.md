@@ -43,7 +43,8 @@ it targeted. Raw agent logs stay in `.demo/` (git-ignored) on the machine that r
 | What | Result |
 |---|---|
 | PR's own validation gate (10 commands from `.ai/agentic.config.json`, run locally on `9c0ef49`) | ✅ all exit 0, including the new atomic-claim, claim-protocol and GitLab/Forgejo lock tests |
-| Scenario 0 | _pending_ |
+| Scenario 0 on [#1](../../issues/1) | ✅ 10/10 rounds with exactly one owner (A won 5, B won 5); in every round both contenders reached the create-only POST before either was sent. A late release by a retired owner was refused and the successor kept its lock. No lock ref left behind. |
+| Side effects of lock refs | ✅ ~24 creates/deletes under `refs/om-locks/` started no workflow run (the only run is the initial push to `main`). |
 | Scenarios 1–3 | _not run yet_ |
 
 ## Setup
